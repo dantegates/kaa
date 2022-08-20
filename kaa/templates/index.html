@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>{{ story.title }}</title>
+    <meta name="description" content="Scrollama: Sticky Side Example" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.2.0/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-gH2yIJqKdNHPEq0n4Mqa/HGKIhSkIHeL5AyhkYV8i59U5AR6csBvApHHNl/vI1Bx" crossorigin="anonymous">
+    <style>
+        html,
+        body {
+          margin: 0;
+          padding: 0;
+        }
+
+        body {
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
+            Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+          min-height: 1280px;
+          background-color: #f3f3f3;
+        }
+
+        main {
+            /*margin: 0 10% 0 10%;*/
+        }
+
+        #scrolly {
+          position: relative;
+          display: -webkit-box;
+          display: -ms-flexbox;
+          display: flex;
+          padding: 1rem;
+        }
+
+        #scrolly>* {
+          -webkit-box-flex: 1;
+          -ms-flex: 1;
+          flex: 1;
+        }
+
+        article {
+            position: relative;
+            padding: 0 1rem;
+            max-width: 30rem;
+        }
+
+        figure {
+            position: -webkit-sticky;
+            position: sticky;
+            width: 100%;
+            margin: 0;
+            -webkit-transform: translate3d(0, 0, 0);
+            -moz-transform: translate3d(0, 0, 0);
+            transform: translate3d(0, 0, 0);
+            z-index: 0;
+        }
+
+        .step p {
+            text-align: center;
+            padding: 1rem;
+            font-size: 1.5rem;
+            font-family: "ABCSerif, Book Antiqua, Palatino Linotype, Palatino, serif"
+        }
+
+        .step:first-child {
+            margin: 50rem auto auto auto;
+        }
+
+        .step:last-child {
+             /*margin: 25rem auto 25rem auto;*/
+        }
+
+        .step.is-active {}
+
+        /*plotly*/
+        .modebar{
+              display: none !important;
+        }
+    </style>
+</head>
+
+<body>
+    <main>
+        {% for section in story %}
+        <section id="scrolly">
+
+            {% if section.figure_left %}
+            <figure>
+                <div id="{{ section.name }}"></div>
+            </figure>
+            {% endif %}
+
+            <article>
+                {% for step in section %}
+                <div class="step" data-step="{{ loop.counter }}" data-endpoint="{{ step.name }}" data-figure-id="{{ section.name }}" data-animate="{{ step.animate }}" data-is-sequence="{{ step.is_sequence }}">
+                    <div class="card-body shadow-lg p-3 mb-5 bg-white">
+                        <p class="card-text">{{ step.text }}</p>
+                    </div>
+                </div>
+                {% endfor %}
+            </article>
+
+            {% if not section.figure_left %}
+            <figure>
+                <div id="{{ section.name }}"></div>
+            </figure>
+            {% endif %}
+
+        </section>
+        {% endfor %}
+
+        <section id="outro"></section>
+    </main>
+
+    <!-- <div class='debug'></div> -->
+    <script src="https://unpkg.com/d3@5.9.1/dist/d3.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.14.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/gh/russellgoldenberg/scrollama/build/scrollama.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lodash.js/4.17.21/lodash.min.js"></script>
+    <script>
+        // using d3 for convenience
+        var main = d3.select("main");
+
+        var scrolly = main.select("#scrolly");
+        var figure = main.selectAll("figure");
+        var article = main.selectAll("article");
+        var step = article.selectAll(".step");
+
+        // initialize the scrollama
+        var scroller = scrollama();
+
+        // generic window resize listener event
+        function handleResize() {
+            // 1. update height of step elements
+            var stepH = Math.floor(window.innerHeight * 0.75);
+            step.style("height", stepH + "px");
+
+            var figureHeight = window.innerHeight / 2;
+            var figureMarginTop = (window.innerHeight - figureHeight) / 2;
+
+            figure
+                .style("height", figureHeight + "px")
+                .style("top", figureMarginTop + "px");
+
+            // 3. tell scrollama to update new element dimensions
+            scroller.resize();
+        }
+
+        // scrollama event handlers
+        function handleStepEnter(response) {
+            // response = { element, direction, index }
+
+            // add color to current step only
+            step.classed("is-active", function (d, i) {
+                return i === response.index;
+            });
+            // figure.classed("is-active", function (d, i) {
+                // return d.id == reponse.element.attributes["data-figure-id"].nodeValue;
+            // });
+
+            // update graphic based on step
+            // figure.classed()
+            if ( response.element.attributes["data-animate"].nodeValue == "True" ) {
+                renderStepAnimations(
+                    response.element.attributes["data-endpoint"].nodeValue,
+                    response.element.attributes["data-figure-id"].nodeValue,
+                    response.element.attributes["data-is-sequence"].nodeValue == "True"
+                );
+            }
+        }
+
+        function handleStepExit(response) {
+            if ( response.element.attributes["data-is-sequence"].nodeValue == "True" ) {
+                clearSequenceAnimations(
+                    response.element.attributes["data-endpoint"].nodeValue,
+                    response.element.attributes["data-figure-id"].nodeValue,
+                );
+            }
+        }
+        
+        function init() {
+
+            // 1. force a resize on load to ensure proper dimensions are sent to scrollama
+            handleResize();
+
+            // 2. setup the scroller passing options
+            //      this will also initialize trigger observations
+            // 3. bind scrollama event handlers (this can be chained like below)
+            scroller
+                .setup({
+                    step: "#scrolly article .step",
+                    offset: .9,
+                    debug: false
+                })
+                .onStepEnter(handleStepEnter)
+                .onStepExit(handleStepExit);
+        }
+
+        // kick things off
+        init();
+    </script>
+
+    <script>
+        var plotlyDefaults = {{ story.defaults | tojson }};
+        var animationSettings = {{ story.animation_settings | tojson }};
+        var sequenceSettings = {{ story.sequence_settings | tojson }};
+
+        function fetchStepData(step) {
+            let request = new XMLHttpRequest();
+            request.open('GET', `/steps/${step}`, false);
+            request.send(null);
+            return JSON.parse(request.responseText);
+        }
+
+        function renderStepAnimations(step, figure_id, is_sequence) {
+            let div = document.getElementById(figure_id);
+            let responseData = _.merge({}, plotlyDefaults, fetchStepData(step));
+            
+            if (is_sequence) {
+                let frameNames = responseData.data.map((_, ix) => `frame_${ix}`);
+                responseData.data.forEach(function (element, ix) {
+                    element.name = frameNames[ix];
+                });
+                Plotly.newPlot(
+                    figure_id,
+                    responseData.data[0],
+                    responseData.layout
+                ).then(function () {
+                    Plotly.addFrames(figure_id, responseData.data.slice(1));
+                    Plotly.animate(figure_id, frameNames.slice(1), sequenceSettings);
+                });
+
+            } else {
+                if ( div.firstChild ) {
+                    Plotly.animate(figure_id, {
+                        data: responseData.data,
+                        layout: responseData.layout,
+                        traces: responseData.hasOwnProperty("update_trace") ? responseData.update_trace : [0]
+                    }, animationSettings);
+                } else {
+                    Plotly.newPlot(figure_id, responseData.data, responseData.layout);
+                }
+
+            }
+        }
+
+        function clearSequenceAnimations(step, figure_id) {
+            let div = document.getElementById(figure_id);
+            while(div.firstChild){
+                div.removeChild(div.firstChild);
+            }
+        }
+
+    </script>
+
+</body>
+
+</html>
